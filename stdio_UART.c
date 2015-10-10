@@ -47,7 +47,7 @@ extern ARM_DRIVER_UART  UART_Driver_(UART_DRV_NUM);
  
   \return          0 on success, or -1 on error.
 */
-int stdio_init (void) {
+int stdioInit (void) {
   int32_t status;
  
   status = ptrUART->Initialize(NULL, 0);

@@ -30,22 +30,22 @@
  *      Thread 1: blinky thread
  *---------------------------------------------------------------------------*/
  
-static void Thread (void const *argument);                             // thread function
-static osThreadId tid_Thread;                                          // thread id
-static osThreadDef (Thread, osPriorityNormal, 1, 0);                   // thread object
+static void blinky(void const *argument);                             // thread function
+static osThreadId tidBlinky;                                          // thread id
+static osThreadDef (blinky, osPriorityNormal, 1, 0);                   // thread object
 
-int Init_BlinkyThread (void) {
-
-  tid_Thread = osThreadCreate (osThread(Thread), NULL);
-  if(!tid_Thread) return(-1);
+int blinkyInit(void)
+{
+  tidBlinky = osThreadCreate (osThread(blinky), NULL);
+  if(!tidBlinky) return(-1);
   
   LED_Initialize();
   
   return(0);
 }
 
-void Thread (void const *argument) {
-
+void blinky(void const *argument)
+{
   while (1) {
     LED_On(0);
     osDelay(500);

@@ -31,18 +31,23 @@
 
 #include "LED.h"
 
-int stdio_init (void);
-int Init_BlinkyThread (void);
+int stdioInit(void);
+int blinkyInit(void);
 
 /*
  * main: initialize and start the system
  */
 int main (void)
 {
-  stdio_init();
-  Init_BlinkyThread();
+  stdioInit();
+  blinkyInit();
   
   while (1) {
-    osDelay(1000);
+    int ch = getchar();
+    if (ch != -1) {
+      putchar(ch);
+    } else {
+      osDelay(100);
+    }
   }
 }
