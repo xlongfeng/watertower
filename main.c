@@ -29,18 +29,61 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "LED.h"
+#include "misc.h"
 
-int stdioInit(void);
-int blinkyInit(void);
+extern int stdioInit(void);
+extern int blinkyInit(void);
+extern int ultrasonicRangingInit(void);
+
+static void rccInit(void)
+{
+  RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
+}
+
+static void nvicInit(void)
+{
+  NVIC_InitTypeDef nvicInitStruct;
+  
+  NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);
+  
+  nvicInitStruct.NVIC_IRQChannel = SPI1_IRQn;
+  nvicInitStruct.NVIC_IRQChannelPreemptionPriority = 2;
+  nvicInitStruct.NVIC_IRQChannelSubPriority = 0;
+  nvicInitStruct.NVIC_IRQChannelCmd = ENABLE;
+  NVIC_Init(&nvicInitStruct);
+  
+  nvicInitStruct.NVIC_IRQChannel = USART1_IRQn;
+  nvicInitStruct.NVIC_IRQChannelPreemptionPriority = 2;
+  nvicInitStruct.NVIC_IRQChannelSubPriority = 1;
+  nvicInitStruct.NVIC_IRQChannelCmd = ENABLE;
+  NVIC_Init(&nvicInitStruct);
+  
+  nvicInitStruct.NVIC_IRQChannel = USART2_IRQn;
+  nvicInitStruct.NVIC_IRQChannelPreemptionPriority = 2;
+  nvicInitStruct.NVIC_IRQChannelSubPriority = 2;
+  nvicInitStruct.NVIC_IRQChannelCmd = ENABLE;
+  
+  nvicInitStruct.NVIC_IRQChannel = EXTI15_10_IRQn;
+  nvicInitStruct.NVIC_IRQChannelPreemptionPriority = 1;
+  nvicInitStruct.NVIC_IRQChannelSubPriority = 0;
+  nvicInitStruct.NVIC_IRQChannelCmd = ENABLE;
+  NVIC_Init(&nvicInitStruct);
+}
 
 /*
  * main: initialize and start the system
  */
 int main (void)
 {
+  rccInit();
+  nvicInit();
+  
   stdioInit();
+  
+  printf("Water Tower Monitor\n");
+  
   blinkyInit();
+  ultrasonicRangingInit();
   
   while (1) {
     int ch = getchar();

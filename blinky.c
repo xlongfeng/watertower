@@ -24,7 +24,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "LED.h"
+#include "stm32f10x_gpio.h"
 
 /*----------------------------------------------------------------------------
  *      Thread 1: blinky thread
@@ -34,22 +34,42 @@ static void blinky(void const *argument);                             // thread 
 static osThreadId tidBlinky;                                          // thread id
 static osThreadDef (blinky, osPriorityNormal, 1, 0);                   // thread object
 
+static void ledInit(void)
+{
+  GPIO_InitTypeDef gpioInitStructure;
+  
+  gpioInitStructure.GPIO_Pin = GPIO_Pin_0;
+  gpioInitStructure.GPIO_Speed = GPIO_Speed_2MHz;
+  gpioInitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+  GPIO_Init(GPIOB, &gpioInitStructure);
+}
+
+static void ledOn(void)
+{
+  GPIO_WriteBit(GPIOB, GPIO_Pin_0, Bit_SET);
+}
+
+static void ledOff(void)
+{
+  GPIO_WriteBit(GPIOB, GPIO_Pin_0, Bit_RESET);
+}
+
 int blinkyInit(void)
 {
   tidBlinky = osThreadCreate (osThread(blinky), NULL);
   if(!tidBlinky) return(-1);
-  
-  LED_Initialize();
   
   return(0);
 }
 
 void blinky(void const *argument)
 {
+  ledInit();
+  
   while (1) {
-    LED_On(0);
+    ledOn();
     osDelay(500);
-    LED_Off(0);
+    ledOff();
     osDelay(1500);
   }
 }

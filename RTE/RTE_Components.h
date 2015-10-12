@@ -16,6 +16,10 @@
         #define RTE_Compiler_IO_STDIN_User      /* Compiler I/O: STDIN User */
 #define RTE_Compiler_IO_STDOUT          /* Compiler I/O: STDOUT */
         #define RTE_Compiler_IO_STDOUT_User     /* Compiler I/O: STDOUT User */
+#define RTE_DEVICE_STDPERIPH_EXTI
+#define RTE_DEVICE_STDPERIPH_FRAMEWORK
+#define RTE_DEVICE_STDPERIPH_GPIO
+#define RTE_DEVICE_STDPERIPH_RCC
 #define RTE_Drivers_SPI1                /* Driver SPI1 */
         #define RTE_Drivers_SPI2                /* Driver SPI2 */
         #define RTE_Drivers_SPI3                /* Driver SPI3 */
