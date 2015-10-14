@@ -34,10 +34,13 @@
 extern int stdioInit(void);
 extern int blinkyInit(void);
 extern int ultrasonicRangingInit(void);
+extern uint32_t getUltrasonicRangingSample(uint16_t index);
 
 static void rccInit(void)
 {
+  RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
   RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
+  RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM5, ENABLE);
 }
 
 static void nvicInit(void)
@@ -63,7 +66,7 @@ static void nvicInit(void)
   nvicInitStruct.NVIC_IRQChannelSubPriority = 2;
   nvicInitStruct.NVIC_IRQChannelCmd = ENABLE;
   
-  nvicInitStruct.NVIC_IRQChannel = EXTI15_10_IRQn;
+  nvicInitStruct.NVIC_IRQChannel = TIM5_IRQn;
   nvicInitStruct.NVIC_IRQChannelPreemptionPriority = 1;
   nvicInitStruct.NVIC_IRQChannelSubPriority = 0;
   nvicInitStruct.NVIC_IRQChannelCmd = ENABLE;
@@ -89,6 +92,9 @@ int main (void)
     int ch = getchar();
     if (ch != -1) {
       putchar(ch);
+      if (ch == 'p') {
+        printf("Ultrasonic Ranging Sample: %d, %d\n", getUltrasonicRangingSample(0), getUltrasonicRangingSample(1));
+      }
     } else {
       osDelay(100);
     }

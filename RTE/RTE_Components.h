@@ -20,6 +20,7 @@
 #define RTE_DEVICE_STDPERIPH_FRAMEWORK
 #define RTE_DEVICE_STDPERIPH_GPIO
 #define RTE_DEVICE_STDPERIPH_RCC
+#define RTE_DEVICE_STDPERIPH_TIM
 #define RTE_Drivers_SPI1                /* Driver SPI1 */
         #define RTE_Drivers_SPI2                /* Driver SPI2 */
         #define RTE_Drivers_SPI3                /* Driver SPI3 */

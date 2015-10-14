@@ -29,42 +29,50 @@
 typedef struct
 {
   uint8_t id;
-  GPIO_TypeDef* triggerGPIOx;
+  GPIO_TypeDef* triggerGPIO;
   uint16_t trigger;
-  GPIO_TypeDef* outputGPIOx;
+  GPIO_TypeDef* outputGPIO;
   uint16_t output;
-  uint8_t portSource;
-  uint8_t pinSource;
-  uint32_t irq;
-  uint32_t microSec;
-  uint32_t sysTickStart;
-  uint32_t sysTickEnd;
+  TIM_TypeDef* tim;
+  uint16_t channel;
+  uint16_t irq;
+  uint16_t capture;
+  uint32_t delta_usec;
 } UltrasonicRanging;
 
 static UltrasonicRanging sensors[2] = {
   {
-    1 << 0,
+    0,
     GPIOB,
-    GPIO_Pin_11,
-    GPIOB,
-    GPIO_Pin_13,
-    GPIO_PortSourceGPIOB,
-    GPIO_PinSource11,
-    EXTI_Line11,
+    GPIO_Pin_8,
+    GPIOA,
+    GPIO_Pin_2,
+    TIM5,
+    TIM_Channel_3,
+    TIM_IT_CC3,
+    0,
   },
   {
-    1 << 1,
+    1,
     GPIOB,
-    GPIO_Pin_14,
-    GPIOB,
-    GPIO_Pin_15,
-    GPIO_PortSourceGPIOB,
-    GPIO_PinSource14,
-    EXTI_Line14,
+    GPIO_Pin_9,
+    GPIOA,
+    GPIO_Pin_3,
+    TIM5,
+    TIM_Channel_4,
+    TIM_IT_CC4,
+    0,
   },
 };
 
 #define NUM_OF_SENSOR (sizeof (sensors) / sizeof (sensors[0]))
+
+#define TIM_CAPTURE_INVALID 0xffff
+#define TIM_PERIOD 0x7fff
+#define TIM_ACCURACY_USEC_SHIFT 8
+#define TIM_ACCURACY_USEC (1 << TIM_ACCURACY_USEC_SHIFT)
+
+static uint16_t ultrasonicRangingsampleInterval = 10;
 
 /*----------------------------------------------------------------------------
  *      Thread 1: ultrasonic ranging thread
@@ -74,32 +82,75 @@ static void ultrasonicRanging(void const *argument);                            
 static osThreadId tidultrasonicRanging;                                          // thread id
 static osThreadDef (ultrasonicRanging, osPriorityNormal, 1, 0);                   // thread object
 
-uint32_t sysTickToMicroSec(uint32_t sysTick)
+static uint16_t TIM_GetCapture(TIM_TypeDef* TIMx, uint16_t TIM_IT)
 {
-  uint32_t microsec_i, microsec_f;
-  
-  microsec_i = sysTick / os_tickus_i;
-  microsec_f = (((uint64_t)sysTick) << 16) / os_tickus_f;
-  
-  return (microsec_i + microsec_f);
+  uint16_t ccr;
+  switch (TIM_IT) {
+    case TIM_IT_CC1:
+      ccr = TIM_GetCapture1(TIMx);
+      break;
+    case TIM_IT_CC2:
+      ccr = TIM_GetCapture2(TIMx);
+      break;
+    case TIM_IT_CC3:
+      ccr = TIM_GetCapture3(TIMx);
+      break;
+    case TIM_IT_CC4:
+      ccr = TIM_GetCapture4(TIMx);
+      break;
+    default:
+      ccr = 0;
+      break;
+  }
+  return ccr;
 }
 
-static uint32_t count;
+static uint16_t captureAccuracy(uint16_t usec)
+{
+  uint32_t prescale;
+  
+  usec = usec < 900 ? usec : 900;
+  
+  prescale = SystemCoreClock / 1000000 * usec - 1;
+  
+  return prescale < 0xffff ? prescale : 0xffff;
+}
 
-void EXTI15_10_IRQHandler(void)
+static void timICInit(UltrasonicRanging *sensor, uint16_t polarity)
+{
+  TIM_ICInitTypeDef timICInitStruct;
+  
+  timICInitStruct.TIM_Channel = sensor->channel;
+  timICInitStruct.TIM_ICPolarity = polarity;
+  timICInitStruct.TIM_ICSelection = TIM_ICSelection_DirectTI;
+  timICInitStruct.TIM_ICPrescaler = TIM_ICPSC_DIV1;
+  timICInitStruct.TIM_ICFilter = 0x00;
+  
+  TIM_ICInit(sensor->tim, &timICInitStruct);
+}
+
+void TIM5_IRQHandler(void)
 {
   UltrasonicRanging *sensor;
+  uint16_t capture;
   int i;
   
   for (i = 0; i < NUM_OF_SENSOR; i++) {
     sensor = &sensors[i];
-    count= osKernelSysTick();
-    if (EXTI_GetITStatus(sensor->irq) == SET) {
-      EXTI_ClearITPendingBit(sensor->irq);
-      if (GPIO_ReadInputDataBit(sensor->triggerGPIOx, sensor->trigger) == Bit_SET) {
-        sensor->sysTickStart = osKernelSysTick();
+    if (TIM_GetITStatus(sensor->tim, sensor->irq) == SET) {
+      TIM_ClearITPendingBit(sensor->tim, sensor->irq);
+      if (sensor->capture != TIM_CAPTURE_INVALID) {
+        capture = TIM_GetCapture(sensor->tim, sensor->irq);
+        if (capture > sensor->capture) {
+          sensor->delta_usec = (capture - sensor->capture) << TIM_ACCURACY_USEC_SHIFT;
+        } else {
+          sensor->delta_usec = ((TIM_PERIOD - sensor->capture + 1) + capture) << TIM_ACCURACY_USEC_SHIFT;
+        }
+        sensor->capture = TIM_CAPTURE_INVALID;
+        timICInit(sensor, TIM_ICPolarity_Rising);
       } else {
-        sensor->sysTickEnd = osKernelSysTick();
+        sensor->capture = TIM_GetCapture(sensor->tim, sensor->irq);
+        timICInit(sensor, TIM_ICPolarity_Falling);
       }
     }
   }
@@ -108,31 +159,38 @@ void EXTI15_10_IRQHandler(void)
 static void sensorInit(void)
 {
   GPIO_InitTypeDef gpioInitStructure;
-  EXTI_InitTypeDef exitInitStructure;
+  TIM_TimeBaseInitTypeDef timTimeBaseInitStruct;
   UltrasonicRanging *sensor;
   int i;
   
   for (i = 0; i < NUM_OF_SENSOR; i++) {
     sensor = &sensors[i];
+    sensor->capture = TIM_CAPTURE_INVALID;
     
     gpioInitStructure.GPIO_Pin = sensor->trigger;
     gpioInitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-    gpioInitStructure.GPIO_Mode = GPIO_Mode_IPU;
-    GPIO_Init(sensor->triggerGPIOx, &gpioInitStructure);
+    gpioInitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+    GPIO_Init(sensor->triggerGPIO, &gpioInitStructure);
+    GPIO_WriteBit(sensor->triggerGPIO, sensor->trigger, Bit_RESET);
     
     gpioInitStructure.GPIO_Pin = sensor->output;
     gpioInitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-    gpioInitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-    GPIO_Init(sensor->outputGPIOx, &gpioInitStructure);
+    gpioInitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+    GPIO_Init(sensor->outputGPIO, &gpioInitStructure);
     
-    EXTI_ClearITPendingBit(sensor->irq);
-    GPIO_EXTILineConfig(sensor->portSource, sensor->pinSource);
+    timTimeBaseInitStruct.TIM_Prescaler = captureAccuracy(TIM_ACCURACY_USEC);
+    timTimeBaseInitStruct.TIM_CounterMode = TIM_CounterMode_Up;
+    timTimeBaseInitStruct.TIM_Period = TIM_PERIOD;
+    timTimeBaseInitStruct.TIM_ClockDivision = 0;
+    timTimeBaseInitStruct.TIM_RepetitionCounter = 0;
+
+    TIM_TimeBaseInit(sensor->tim, &timTimeBaseInitStruct);
     
-    exitInitStructure.EXTI_Line = sensor->irq;
-    exitInitStructure.EXTI_Mode = EXTI_Mode_Interrupt;
-    exitInitStructure.EXTI_Trigger = EXTI_Trigger_Rising;
-    exitInitStructure.EXTI_LineCmd = ENABLE;
-    EXTI_Init(&exitInitStructure);
+    timICInit(sensor, TIM_ICPolarity_Rising);
+    
+    TIM_Cmd(sensor->tim, ENABLE);
+    
+    TIM_ITConfig(sensor->tim, sensor->irq, ENABLE);
   }
 }
 
@@ -146,19 +204,34 @@ int ultrasonicRangingInit(void)
   return(0);
 }
 
+void setUltrasonicRangingSampleInterval(uint16_t sampleInterval)
+{
+  ultrasonicRangingsampleInterval = sampleInterval;
+}
+
+uint32_t getUltrasonicRangingSample(uint16_t index)
+{
+  if (index > NUM_OF_SENSOR)
+    return 0;
+  return sensors[index].delta_usec;
+}
+
 void ultrasonicRanging(void const *argument)
 {
   UltrasonicRanging *sensor;
-
-  NVIC_EnableIRQ(EXTI15_10_IRQn);
+  int i;
   
   while (1) {
-    sensor = &sensors[0];
-    if(sensor) {
-      printf("%d: microSec %d, start %d, end %d, %d\n",
-              sensor->id, sysTickToMicroSec(sensor->sysTickStart - sensor->sysTickEnd),
-              sensor->sysTickStart, sensor->sysTickEnd, count);
+    if (ultrasonicRangingsampleInterval > 0) {
+      for (i = 0; i < NUM_OF_SENSOR; i++) {
+        sensor = &sensors[i];
+        GPIO_WriteBit(sensor->triggerGPIO, sensor->trigger, Bit_SET);
+        osDelay(2);
+        GPIO_WriteBit(sensor->triggerGPIO, sensor->trigger, Bit_RESET);
+      }
+      osDelay(ultrasonicRangingsampleInterval * 1000);
+    } else {
+      osDelay(1000);
     }
-    osDelay(1000);
   }
 }
