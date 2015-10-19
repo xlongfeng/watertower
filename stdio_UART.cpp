@@ -40,6 +40,10 @@
  
 extern ARM_DRIVER_UART  UART_Driver_(UART_DRV_NUM);
 #define ptrUART       (&UART_Driver_(UART_DRV_NUM))
+
+extern "C" int stdin_getchar (void);
+extern "C" int stderr_putchar (int ch);
+extern "C" int stdout_putchar (int ch);
  
  
 /**

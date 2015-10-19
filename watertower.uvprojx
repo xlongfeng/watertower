@@ -417,24 +417,24 @@
           <GroupName>Source</GroupName>
           <Files>
             <File>
-              <FileName>main.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>.\main.c</FilePath>
+              <FileName>blinky.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\blinky.cpp</FilePath>
             </File>
             <File>
-              <FileName>blinky.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>.\blinky.c</FilePath>
+              <FileName>main.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\main.cpp</FilePath>
             </File>
             <File>
-              <FileName>stdio_UART.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>.\stdio_UART.c</FilePath>
+              <FileName>stdio_UART.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\stdio_UART.cpp</FilePath>
             </File>
             <File>
-              <FileName>ultrasonicranging.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>.\ultrasonicranging.c</FilePath>
+              <FileName>ultrasonicranging.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\ultrasonicranging.cpp</FilePath>
             </File>
           </Files>
         </Group>
