@@ -31,8 +31,8 @@ typedef struct
   uint8_t id;
   GPIO_TypeDef* triggerGPIO;
   uint16_t trigger;
-  GPIO_TypeDef* outputGPIO;
-  uint16_t output;
+  GPIO_TypeDef* echoGPIO;
+  uint16_t echo;
   TIM_TypeDef* tim;
   uint16_t channel;
   uint16_t irq;
@@ -69,7 +69,7 @@ static UltrasonicRanging sensors[2] = {
 
 #define TIM_CAPTURE_INVALID 0xffff
 #define TIM_PERIOD 0x7fff
-#define TIM_ACCURACY_USEC_SHIFT 8
+#define TIM_ACCURACY_USEC_SHIFT 3
 #define TIM_ACCURACY_USEC (1 << TIM_ACCURACY_USEC_SHIFT)
 
 static uint16_t ultrasonicRangingsampleInterval = 10;
@@ -129,6 +129,18 @@ static void timICInit(UltrasonicRanging *sensor, uint16_t polarity)
   TIM_ICInit(sensor->tim, &timICInitStruct);
 }
 
+static void timICStart(UltrasonicRanging *sensor)
+{
+  sensor->capture = TIM_CAPTURE_INVALID;
+  timICInit(sensor, TIM_ICPolarity_Rising);
+  TIM_Cmd(sensor->tim, ENABLE);
+}
+
+static void timICStop(UltrasonicRanging *sensor)
+{
+  TIM_Cmd(sensor->tim, DISABLE);
+}
+
 void TIM5_IRQHandler(void)
 {
   UltrasonicRanging *sensor;
@@ -146,8 +158,7 @@ void TIM5_IRQHandler(void)
         } else {
           sensor->delta_usec = ((TIM_PERIOD - sensor->capture + 1) + capture) << TIM_ACCURACY_USEC_SHIFT;
         }
-        sensor->capture = TIM_CAPTURE_INVALID;
-        timICInit(sensor, TIM_ICPolarity_Rising);
+        timICStop(sensor);
       } else {
         sensor->capture = TIM_GetCapture(sensor->tim, sensor->irq);
         timICInit(sensor, TIM_ICPolarity_Falling);
@@ -173,10 +184,10 @@ static void sensorInit(void)
     GPIO_Init(sensor->triggerGPIO, &gpioInitStructure);
     GPIO_WriteBit(sensor->triggerGPIO, sensor->trigger, Bit_RESET);
     
-    gpioInitStructure.GPIO_Pin = sensor->output;
+    gpioInitStructure.GPIO_Pin = sensor->echo;
     gpioInitStructure.GPIO_Speed = GPIO_Speed_2MHz;
     gpioInitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-    GPIO_Init(sensor->outputGPIO, &gpioInitStructure);
+    GPIO_Init(sensor->echoGPIO, &gpioInitStructure);
     
     timTimeBaseInitStruct.TIM_Prescaler = captureAccuracy(TIM_ACCURACY_USEC);
     timTimeBaseInitStruct.TIM_CounterMode = TIM_CounterMode_Up;
@@ -185,10 +196,6 @@ static void sensorInit(void)
     timTimeBaseInitStruct.TIM_RepetitionCounter = 0;
 
     TIM_TimeBaseInit(sensor->tim, &timTimeBaseInitStruct);
-    
-    timICInit(sensor, TIM_ICPolarity_Rising);
-    
-    TIM_Cmd(sensor->tim, ENABLE);
     
     TIM_ITConfig(sensor->tim, sensor->irq, ENABLE);
   }
@@ -225,6 +232,7 @@ void ultrasonicRanging(void const *argument)
     if (ultrasonicRangingsampleInterval > 0) {
       for (i = 0; i < NUM_OF_SENSOR; i++) {
         sensor = &sensors[i];
+        timICStart(sensor);
         GPIO_WriteBit(sensor->triggerGPIO, sensor->trigger, Bit_SET);
         osDelay(2);
         GPIO_WriteBit(sensor->triggerGPIO, sensor->trigger, Bit_RESET);
