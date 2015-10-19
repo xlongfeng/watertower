@@ -28,8 +28,15 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "misc.h"
+
+#define SYS_CBSIZE 128
+#define SYS_MAX_ARGS 4
+
+static const char *sysPrompt = "STM32# ";
+static char consoleBuffer[SYS_CBSIZE];
 
 extern int stdioInit(void);
 extern int blinkyInit(void);
@@ -73,6 +80,186 @@ static void nvicInit(void)
   NVIC_Init(&nvicInitStruct);
 }
 
+struct CmdTableS
+{
+  const char *name;
+  int maxargs;
+  int (*cmd)(struct CmdTableS *, int, char *[]);
+  const char *usage;
+};
+
+typedef struct CmdTableS CmdTableT;
+
+int do_help(CmdTableT *cmdtp, int argc, char *argv[]);
+int do_ur(CmdTableT *cmdtp, int argc, char *argv[]);
+
+static const CmdTableT cmdTable[] = {
+  {"?", SYS_MAX_ARGS, do_help, "alias for 'help'"},
+  {"help", SYS_MAX_ARGS, do_help, "print online help"},
+  {"ur", SYS_MAX_ARGS, do_ur, "ultrasonic ranging"},
+};
+
+#define CMD_ITEMS (sizeof (cmdTable) / sizeof (cmdTable[0]))
+
+static CmdTableT *findCmd(char *cmd)
+{
+  const char *p;
+  int len;
+  int i;
+  
+  len = ((p = strchr(cmd, '.')) ==NULL) ? strlen(cmd) : (p - cmd);
+  
+  for (i = 0; i < CMD_ITEMS; i++) {
+    if (strncmp(cmd, cmdTable[i].name, len) == 0) {
+      if (len == strlen(cmdTable[i].name))
+        return (CmdTableT *)&cmdTable[i];
+    }
+  }
+  
+  return 0;
+}
+
+static void cmdUsage(CmdTableT *cmdtp)
+{
+  printf("%s - %s\n\n", cmdtp->name, cmdtp->usage);
+}
+
+int do_help(CmdTableT *cmdtp, int argc, char *argv[])
+{
+  int i;
+  
+  if (argc == 1) {
+    for (i = 0; i < CMD_ITEMS; i++) {
+      printf("%*s- %s\n", 8, cmdTable[i].name, cmdTable[i].usage);
+    }
+  } else {
+    for (i = 1; i < argc; i++) {
+      if ((cmdtp = findCmd(argv[i])) != NULL) {
+        cmdUsage(cmdtp);
+      } else {
+        printf("Unknown comand '%s' - try help;"
+               " without arguments for list of all"
+               " known commands\n\n", argv[i]);
+      }
+    }
+  }
+  
+  return 0;
+}
+
+int do_ur(CmdTableT *cmdtp, int argc, char *argv[])
+{
+  uint32_t sample0 = getUltrasonicRangingSample(0);
+  uint32_t sample1 = getUltrasonicRangingSample(1);
+  uint32_t distance0 = sample0 * 340 / 2 / 10000;
+  uint32_t distance1 = sample1 * 340 / 2 / 10000;
+  printf("Ultrasonic ranging sample[0]: %d cm <%d usec>, sample[1]: %d cm <%d usec>\n",
+      distance0, sample0, distance1, sample1);
+  return 0;
+}
+
+static int readline(void)
+{
+  int len, ch;
+  char *p = consoleBuffer;
+  
+  printf(sysPrompt);
+  
+  len = 0;
+  while (1) {
+    ch = getchar();
+    if (ch < 0) {
+      osDelay(100);
+      continue;
+    }
+    
+    switch (ch) {
+    case '\r':
+    case '\n':
+      *p = '\0';
+      putchar('\n');
+      return len;
+    case '\0':
+      continue;
+    case 0x03: /* ^C - break */
+      consoleBuffer[0] = '\0';
+      return -1;
+    default:
+      if (len < SYS_CBSIZE - 2) {
+        len++;
+        *p++ = ch;
+        putchar(ch);
+      } else {
+        putchar('\a');
+      }
+    }
+  }
+}
+
+static int parseLine(char *line, char *argv[])
+{
+  int nargs = 0;
+  
+  while (nargs < SYS_MAX_ARGS) {
+    while ((*line == ' ') || (*line == '\t')) {
+      line++;
+    }
+    
+    if (*line == '\0') {
+      argv[nargs] = NULL;
+      return nargs;
+    }
+    
+    argv[nargs++] = line;
+    
+    while (*line && (*line != ' ') && (*line != '\t')) {
+      ++line;
+    }
+    
+    if (*line == '\0') {
+      argv[nargs] = NULL;
+      return nargs; 
+    }
+    
+    *line++ = '\0';
+  }
+  
+  printf(" ** Too many args (max. %d) **\n", SYS_MAX_ARGS);
+  
+  return nargs;
+}
+
+static int runCommand(void)
+{
+  char *cmdBuffer = consoleBuffer;
+  int len = strlen(cmdBuffer);
+  char *argv[SYS_MAX_ARGS];
+  int argc;
+  CmdTableT *cmdtp;
+  
+  if (len > SYS_CBSIZE) {
+    puts("## Command too long!");
+    return -1;
+  }
+  
+  if ((argc = parseLine(cmdBuffer, argv)) == 0) {
+    puts("## No command at all");
+    return -1;
+  }
+  
+  if ((cmdtp = findCmd(argv[0])) == NULL) {
+    printf("Unknown command '%s' - try 'help'\n", argv[0]);
+    return -1;
+  }
+  
+  if (argc > cmdtp->maxargs) {
+    cmdUsage(cmdtp);
+    return -1;
+  }
+  
+  return (cmdtp->cmd)(cmdtp, argc, argv);
+}
+
 /*
  * main: initialize and start the system
  */
@@ -89,14 +276,11 @@ int main (void)
   ultrasonicRangingInit();
   
   while (1) {
-    int ch = getchar();
-    if (ch != -1) {
-      putchar(ch);
-      if (ch == 'p') {
-        printf("Ultrasonic Ranging Sample: %d, %d\n", getUltrasonicRangingSample(0), getUltrasonicRangingSample(1));
-      }
-    } else {
-      osDelay(100);
+    int len = readline();
+    if (len > 0) {
+      runCommand();
+    } else if (len < 0) {
+      puts("<INTERRUPT>");
     }
   }
 }
