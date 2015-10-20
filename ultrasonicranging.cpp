@@ -43,8 +43,8 @@ typedef struct
 static UltrasonicRanging sensors[2] = {
   {
     0,
-    GPIOB,
-    GPIO_Pin_8,
+    GPIOA,
+    GPIO_Pin_7,
     GPIOA,
     GPIO_Pin_2,
     TIM5,
@@ -54,8 +54,8 @@ static UltrasonicRanging sensors[2] = {
   },
   {
     1,
-    GPIOB,
-    GPIO_Pin_9,
+    GPIOA,
+    GPIO_Pin_5,
     GPIOA,
     GPIO_Pin_3,
     TIM5,

@@ -80,7 +80,7 @@
           </BeforeMake>
           <AfterMake>
             <RunUserProg1>1</RunUserProg1>
-            <RunUserProg2>1</RunUserProg2>
+            <RunUserProg2>0</RunUserProg2>
             <UserProg1Name>fromelf --bin -o "$L@L.bin" "#L"</UserProg1Name>
             <UserProg2Name>fromelf -c -o "$L@L.txt" "#L"</UserProg2Name>
             <UserProg1Dos16Mode>0</UserProg1Dos16Mode>
@@ -435,6 +435,16 @@
               <FileName>ultrasonicranging.cpp</FileName>
               <FileType>8</FileType>
               <FilePath>.\ultrasonicranging.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>si4432.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\si4432.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>multipointcom.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\multipointcom.cpp</FilePath>
             </File>
           </Files>
         </Group>

@@ -40,14 +40,19 @@ static char consoleBuffer[SYS_CBSIZE];
 
 extern int stdioInit(void);
 extern int blinkyInit(void);
+extern int multiPointComInit(void);
 extern int ultrasonicRangingInit(void);
 extern uint32_t getUltrasonicRangingSample(uint16_t index);
 
 static void rccInit(void)
 {
+  RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
   RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
   RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
+  RCC_APB2PeriphClockCmd(RCC_APB2Periph_SPI1, ENABLE);
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM5, ENABLE);
+
+  GPIO_PinRemapConfig(GPIO_Remap_SWJ_JTAGDisable, ENABLE);
 }
 
 static void nvicInit(void)
@@ -273,6 +278,7 @@ int main (void)
   printf("Water Tower Monitor\n");
   
   blinkyInit();
+  multiPointComInit();
   ultrasonicRangingInit();
   
   while (1) {

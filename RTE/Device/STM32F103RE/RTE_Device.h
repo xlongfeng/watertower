@@ -783,8 +783,8 @@
 //     <i>  Selects Port Bit
 //   </e>
 #define RTE_SPI1_NSS_PIN                1
-#define RTE_SPI1_NSS_PORT               GPIO_PORT(0)
-#define RTE_SPI1_NSS_BIT                4
+#define RTE_SPI1_NSS_PORT               GPIO_PORT(1)
+#define RTE_SPI1_NSS_BIT                8
 
 //   <o> SPI1_SCK Pin <0=>PA5
 #define RTE_SPI1_SCK_PORT_ID_DEF        0
@@ -815,7 +815,7 @@
 
 //   <e> SPI1 Pin Remap
 //   <i> Enable SPI1 Pin Remapping.
-#define RTE_SPI1_REMAP                  0
+#define RTE_SPI1_REMAP                  1
 
 //   <o> SPI1_SCK Pin <0=>PB3
 #define RTE_SPI1_SCK_PORT_ID_FULL       0
@@ -982,8 +982,8 @@
 //     <i>  Selects Port Bit
 //   </e>
 #define RTE_SPI3_NSS_PIN                1
-#define RTE_SPI3_NSS_PORT               GPIO_PORT(0)
-#define RTE_SPI3_NSS_BIT                15
+#define RTE_SPI3_NSS_PORT               GPIO_PORT(1)
+#define RTE_SPI3_NSS_BIT                8
 
 //   <o> SPI3_SCK Pin <0=>PB3
 #define RTE_SPI3_SCK_PORT_ID_DEF        0

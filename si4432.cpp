@@ -1,6 +1,19 @@
+#include <cmsis_os.h>
+#include <stdio.h>
+#include <math.h>
+
+#include "stm32f10x_gpio.h"
+#include "Driver_SPI.h"
+
 #include "si4432.h"
 
-#include <SPI.h>
+#define SPI_DRV_NUM           1
+#define SPI_BUS_SPEED         2000000
+#define _SPI_Driver_(n)  Driver_SPI##n
+#define SPI_Driver_(n) _SPI_Driver_(n)
+ 
+extern ARM_DRIVER_SPI  SPI_Driver_(SPI_DRV_NUM);
+#define ptrSPI       (&SPI_Driver_(SPI_DRV_NUM))
 
 #define MAX_TRANSMIT_TIMEOUT 200
 // #define DEBUG
@@ -9,9 +22,8 @@
 const uint16_t IFFilterTable[][2] = { { 322, 0x26 }, { 3355, 0x88 }, { 3618, 0x89 }, { 4202, 0x8A }, { 4684, 0x8B }, {
 		5188, 0x8C }, { 5770, 0x8D }, { 6207, 0x8E } };
 
-Si4432::Si4432(uint8_t sdnPin, uint8_t InterruptPin) :
-		_sdnPin(sdnPin), _intPin(InterruptPin), _freqCarrier(433000000), _freqChannel(0), _kbps(100), _packageSign(
-				0xDEAD) { // default is 450 mhz
+Si4432::Si4432() :
+		_freqCarrier(433000000), _freqChannel(0), _kbps(100), _packageSign(0xDEAD) { // default is 450 mhz
 
 }
 
@@ -49,28 +61,35 @@ void Si4432::setCommsSignature(uint16_t signature) {
 	ChangeRegister(REG_CHECK_HEADER2, (_packageSign & 0xFF)); // header (signature) byte 2 val for receive checks
 
 #ifdef DEBUG
-	Serial.println("Package signature is set!");
+	printf("Package signature is set!\n");
 #endif
 }
 
 void Si4432::init() {
-
-	if (_intPin != 0)
-		pinMode(_intPin, INPUT);
-
-	pinMode(_sdnPin, OUTPUT);
+  GPIO_InitTypeDef gpioInitStructure;
+  
+  /* _intPin */
+  gpioInitStructure.GPIO_Pin = GPIO_Pin_6;
+  gpioInitStructure.GPIO_Speed = GPIO_Speed_2MHz;
+  gpioInitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+  GPIO_Init(GPIOB, &gpioInitStructure);
+  
+  /* _sdnPin */
+  gpioInitStructure.GPIO_Pin = GPIO_Pin_9;
+  gpioInitStructure.GPIO_Speed = GPIO_Speed_2MHz;
+  gpioInitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+  GPIO_Init(GPIOB, &gpioInitStructure);
+  
 	turnOff();
-
-	pinMode(SS, OUTPUT);
-	digitalWrite(SS, HIGH); // set pin high, so chip would know we don't use it. - well, it's turned off anyway but...
-
-	SPI.begin();
-	SPI.setBitOrder(MSBFIRST);
-	SPI.setClockDivider(SPI_CLOCK_DIV16); // 16/ 2 = 8 MHZ. Max. is 10 MHZ, so we're cool.
-	SPI.setDataMode(SPI_MODE0);
+  
+  ptrSPI->Initialize(NULL);
+  ptrSPI->PowerControl(ARM_POWER_FULL);
+  ptrSPI->Configure(ARM_SPI_CPOL0_CPHA0, ARM_SPI_MSB_LSB);
+  ptrSPI->BusSpeed(SPI_BUS_SPEED);
+  ptrSPI->SlaveSelect(ARM_SPI_SS_INACTIVE);
 
 #ifdef DEBUG
-	Serial.println("SPI is initialized now.");
+	printf("SPI is initialized now.\n");
 #endif
 
 	hardReset();
@@ -127,11 +146,11 @@ bool Si4432::sendPacket(uint8_t length, const byte* data, bool waitResponse, uin
 
 	switchMode(TXMode | Ready);
 
-	uint64_t enterMillis = millis();
+	uint32_t enterMillis = osKernelSysTick();
 
-	while (millis() - enterMillis < MAX_TRANSMIT_TIMEOUT) {
+	while (osKernelSysTick() - enterMillis < osKernelSysTickMicroSec(MAX_TRANSMIT_TIMEOUT * 1000)) {
 
-		if ((_intPin != 0) && (digitalRead(_intPin) != 0)) {
+		if (GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_6) != Bit_RESET) {
 			continue;
 		}
 
@@ -141,8 +160,7 @@ bool Si4432::sendPacket(uint8_t length, const byte* data, bool waitResponse, uin
 		if (intStatus & 0x04) {
 			switchMode(Ready | TuneMode);
 #ifdef DEBUG
-			Serial.print("Package sent! -- ");
-			Serial.println(intStatus, HEX);
+			printf("Package sent! -- %x\n", intStatus);
 #endif
 			// package sent. now, return true if not to wait ack, or wait ack (wait for packet only for 'remaining' amount of time)
 			if (waitResponse) {
@@ -160,7 +178,7 @@ bool Si4432::sendPacket(uint8_t length, const byte* data, bool waitResponse, uin
 
 	//timeout occured.
 //#ifdef DEBUG
-	Serial.println("Timeout in Transit -- ");
+	printf("Timeout in Transit -- \n");
 //#endif
 	switchMode(Ready);
 
@@ -176,8 +194,9 @@ bool Si4432::waitForPacket(uint64_t waitMs) {
 
 	startListening();
 
-	uint64_t enterMillis = millis();
-	while (millis() - enterMillis < waitMs) {
+  uint32_t enterMillis = osKernelSysTick();
+
+	while (osKernelSysTick() - enterMillis < osKernelSysTickMicroSec(waitMs * 1000)) {
 
 		if (!isPacketReceived()) {
 			continue;
@@ -188,7 +207,7 @@ bool Si4432::waitForPacket(uint64_t waitMs) {
 	}
 	//timeout occured.
 
-	Serial.println("Timeout in receive-- ");
+	printf("Timeout in receive-- \n");
 
 	switchMode(Ready);
 	clearRxFIFO();
@@ -218,8 +237,7 @@ void Si4432::switchMode(byte mode) {
 #ifdef DEBUG
 	byte val = ReadRegister(REG_DEV_STATUS);
 	if (val == 0 || val == 0xFF) {
-		Serial.print(val, HEX);
-		Serial.println(" -- WHAT THE HELL!!");
+		printf("%x -- WHAT THE HELL!!\n", val);
 	}
 #endif
 }
@@ -250,8 +268,7 @@ void Si4432::setBaudRate(uint16_t kbps) {
 	//now set the timings
 	uint16_t minBandwidth = (2 * (uint32_t) freqDev) + kbps;
 #ifdef DEBUG
-	Serial.print("min Bandwidth value: ");
-	Serial.println(minBandwidth, HEX);
+	printf("min Bandwidth value: %x\n", minBandwidth);
 #endif
 	byte IFValue = 0xff;
 	//since the table is ordered (from low to high), just find the 'minimum bandwith which is greater than required'
@@ -262,8 +279,7 @@ void Si4432::setBaudRate(uint16_t kbps) {
 		}
 	}
 #ifdef DEBUG
-	Serial.print("Selected IF value: ");
-	Serial.println(IFValue, HEX);
+	printf("Selected IF value: %x\n", IFValue);
 #endif
 
 	ChangeRegister(REG_IF_FILTER_BW, IFValue);
@@ -271,9 +287,9 @@ void Si4432::setBaudRate(uint16_t kbps) {
 	byte dwn3_bypass = (IFValue & 0x80) ? 1 : 0; // if msb is set
 	byte ndec_exp = (IFValue >> 4) & 0x07; // only 3 bits
 
-	uint16_t rxOversampling = round((500.0 * (1 + 2 * dwn3_bypass)) / ((pow(2, ndec_exp - 3)) * (double ) kbps));
+	uint16_t rxOversampling = round((500.0 * (1 + 2 * dwn3_bypass)) / ((pow(2.0, ndec_exp - 3)) * (double ) kbps));
 
-	uint32_t ncOffset = ceil(((double) kbps * (pow(2, ndec_exp + 20))) / (500.0 * (1 + 2 * dwn3_bypass)));
+	uint32_t ncOffset = ceil(((double) kbps * (pow(2.0, ndec_exp + 20))) / (500.0 * (1 + 2 * dwn3_bypass)));
 
 	uint16_t crGain = 2 + ((65535 * (int64_t) kbps) / ((int64_t) rxOversampling * freqDev));
 	byte crMultiplier = 0x00;
@@ -281,19 +297,12 @@ void Si4432::setBaudRate(uint16_t kbps) {
 		crGain = 0x7FF;
 	}
 #ifdef DEBUG
-	Serial.print("dwn3_bypass value: ");
-	Serial.println(dwn3_bypass, HEX);
-	Serial.print("ndec_exp value: ");
-	Serial.println(ndec_exp, HEX);
-	Serial.print("rxOversampling value: ");
-	Serial.println(rxOversampling, HEX);
-	Serial.print("ncOffset value: ");
-	Serial.println(ncOffset, HEX);
-	Serial.print("crGain value: ");
-	Serial.println(crGain, HEX);
-	Serial.print("crMultiplier value: ");
-	Serial.println(crMultiplier, HEX);
-
+	printf("dwn3_bypass value: %x\n", dwn3_bypass);
+	printf("ndec_exp value: %x\n", ndec_exp);
+	printf("rxOversampling value: %x\n", rxOversampling);
+	printf("ncOffset value: %x\n", ncOffset);
+	printf("crGain value: %x\n", crGain);
+	printf("crMultiplier value: %x\n", crMultiplier);
 #endif
 
 	byte timingVals[] = { rxOversampling & 0x00FF, ((rxOversampling & 0x0700) >> 3) | ((ncOffset >> 16) & 0x0F),
@@ -313,42 +322,37 @@ void Si4432::BurstWrite(Registers startReg, const byte value[], uint8_t length) 
 
 	byte regVal = (byte) startReg | 0x80; // set MSB
 
-	digitalWrite(SS, LOW);
-	SPI.transfer(regVal);
+  ptrSPI->SlaveSelect(ARM_SPI_SS_ACTIVE);
+  ptrSPI->TransferByte(regVal);
 
 	for (byte i = 0; i < length; ++i) {
 #ifdef DEBUG
-		Serial.print("Writing: ");
-		Serial.print((regVal != 0xFF ? (regVal + i) & 0x7F : 0x7F), HEX);
-		Serial.print(" | ");
-		Serial.println(value[i], HEX);
+		printf("Writing: %x | %x\n", (regVal != 0xFF ? (regVal + i) & 0x7F : 0x7F), value[i]);
+    osDelay(5);
 #endif
-		SPI.transfer(value[i]);
-
+    ptrSPI->TransferByte(value[i]);
 	}
 
-	digitalWrite(SS, HIGH);
+  ptrSPI->SlaveSelect(ARM_SPI_SS_INACTIVE);
 }
 
 void Si4432::BurstRead(Registers startReg, byte value[], uint8_t length) {
 
 	byte regVal = (byte) startReg & 0x7F; // set MSB
 
-	digitalWrite(SS, LOW);
-	SPI.transfer(regVal);
+	ptrSPI->SlaveSelect(ARM_SPI_SS_ACTIVE);
+  ptrSPI->TransferByte(regVal);
 
 	for (byte i = 0; i < length; ++i) {
-		value[i] = SPI.transfer(0xFF);
+		value[i] = ptrSPI->TransferByte(0xFF);
 
 #ifdef DEBUG
-		Serial.print("Reading: ");
-		Serial.print((regVal != 0x7F ? (regVal + i) & 0x7F : 0x7F), HEX);
-		Serial.print(" | ");
-		Serial.println(value[i], HEX);
+		printf("Reading: %x | %x\n", (regVal != 0x7F ? (regVal + i) & 0x7F : 0x7F), value[i]);
+    osDelay(5);
 #endif
 	}
 
-	digitalWrite(SS, HIGH);
+	ptrSPI->SlaveSelect(ARM_SPI_SS_INACTIVE);
 }
 
 void Si4432::readAll() {
@@ -358,10 +362,8 @@ void Si4432::readAll() {
 	BurstRead(REG_DEV_TYPE, allValues, 0x7F);
 
 	for (byte i = 0; i < 0x7f; ++i) {
-		Serial.print("REG(");
-		Serial.print((int) REG_DEV_TYPE + i, HEX);
-		Serial.print(") : ");
-		Serial.println((int) allValues[i], HEX);
+    printf("REG(%x) : %x\n", (int) REG_DEV_TYPE + i, (int) allValues[i]);
+    osDelay(5);
 	}
 
 }
@@ -387,7 +389,7 @@ void Si4432::softReset() {
 
 	byte reg = ReadRegister(REG_INT_STATUS2);
 	while ((reg & 0x02) != 0x02) {
-		delay(1);
+		osDelay(1);
 		reg = ReadRegister(REG_INT_STATUS2);
 	}
 
@@ -403,9 +405,8 @@ void Si4432::hardReset() {
 	byte reg = ReadRegister(REG_INT_STATUS2);
 	while ((reg & 0x02) != 0x02) {
 
-		Serial.print("POR: ");
-		Serial.println(reg, HEX);
-		delay(1);
+		printf("POR: %x\n", reg);
+		osDelay(50);
 		reg = ReadRegister(REG_INT_STATUS2);
 	}
 
@@ -432,7 +433,7 @@ void Si4432::startListening() {
 
 bool Si4432::isPacketReceived() {
 
-	if ((_intPin != 0) && (digitalRead(_intPin) != 0)) {
+	if (GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_6) != Bit_RESET) {
 		return false; // if no interrupt occured, no packet received is assumed (since startListening will be called prior, this assumption is enough)
 	}
 	// check for package received status interrupt register
@@ -443,15 +444,13 @@ bool Si4432::isPacketReceived() {
 
 	if (intStat2 & 0x40) { //interrupt occured, check it && read the Interrupt Status1 register for 'preamble '
 
-		Serial.print("HEY!! HEY!! Valid Preamble detected -- ");
-		Serial.println(intStat2, HEX);
+		printf("HEY!! HEY!! Valid Preamble detected -- %x\n", intStat2);
 
 	}
 
 	if (intStat2 & 0x80) { //interrupt occured, check it && read the Interrupt Status1 register for 'preamble '
 
-		Serial.print("HEY!! HEY!! SYNC WORD detected -- ");
-		Serial.println(intStat2, HEX);
+		printf("HEY!! HEY!! SYNC WORD detected -- %x\n", intStat2);
 
 	}
 #else
@@ -461,15 +460,13 @@ bool Si4432::isPacketReceived() {
 	if (intStat & 0x02) { //interrupt occured, check it && read the Interrupt Status1 register for 'valid packet'
 		switchMode(Ready | TuneMode); // if packet came, get out of Rx mode till the packet is read out. Keep PLL on for fast reaction
 #ifdef DEBUG
-				Serial.print("Packet detected -- ");
-				Serial.println(intStat, HEX);
+				printf("Packet detected -- %x\n", intStat);
 #endif
 		return true;
 	} else if (intStat & 0x01) { // packet crc error
 		switchMode(Ready); // get out of Rx mode till buffers are cleared
 //#ifdef DEBUG
-		Serial.print("CRC Error in Packet detected!-- ");
-		Serial.println(intStat, HEX);
+    printf("CRC Error in Packet detected!-- %x\n", intStat);
 //#endif
 		clearRxFIFO();
 		switchMode(RXMode | Ready); // get back to work
@@ -482,12 +479,11 @@ bool Si4432::isPacketReceived() {
 }
 
 void Si4432::turnOn() {
-	digitalWrite(_sdnPin, LOW); // turn on the chip now
-	delay(20);
+	GPIO_WriteBit(GPIOB, GPIO_Pin_9, Bit_RESET);; // turn on the chip now
+	osDelay(20);
 }
 
 void Si4432::turnOff() {
-	digitalWrite(_sdnPin, HIGH); // turn off the chip now
-	delay(1);
-
+	GPIO_WriteBit(GPIOB, GPIO_Pin_9, Bit_SET); // turn off the chip now
+	osDelay(1);
 }
