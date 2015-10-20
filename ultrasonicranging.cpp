@@ -134,11 +134,13 @@ static void timICStart(UltrasonicRanging *sensor)
   sensor->capture = TIM_CAPTURE_INVALID;
   timICInit(sensor, TIM_ICPolarity_Rising);
   TIM_Cmd(sensor->tim, ENABLE);
+  TIM_ITConfig(sensor->tim, sensor->irq, ENABLE);
 }
 
 static void timICStop(UltrasonicRanging *sensor)
 {
   TIM_Cmd(sensor->tim, DISABLE);
+  TIM_ITConfig(sensor->tim, sensor->irq, DISABLE);
 }
 
 void TIM5_IRQHandler(void)
@@ -196,8 +198,6 @@ static void sensorInit(void)
     timTimeBaseInitStruct.TIM_RepetitionCounter = 0;
 
     TIM_TimeBaseInit(sensor->tim, &timTimeBaseInitStruct);
-    
-    TIM_ITConfig(sensor->tim, sensor->irq, ENABLE);
   }
 }
 
@@ -227,6 +227,8 @@ void ultrasonicRanging(void const *argument)
 {
   UltrasonicRanging *sensor;
   int i;
+  
+  osDelay(3000);
   
   while (1) {
     if (ultrasonicRangingsampleInterval > 0) {
