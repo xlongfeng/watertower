@@ -34,6 +34,8 @@ static void blinky(void const *argument);                             // thread 
 static osThreadId tidBlinky;                                          // thread id
 static osThreadDef (blinky, osPriorityNormal, 1, 0);                   // thread object
 
+static int blinkyMode = 0;
+
 static void ledInit(void)
 {
   GPIO_InitTypeDef gpioInitStructure;
@@ -62,13 +64,28 @@ int blinkyInit(void)
   return(0);
 }
 
+void setBlinkyMode(int mode)
+{
+  blinkyMode = mode;
+}
+
 void blinky(void const *argument)
 {
   ledInit();
   
   while (1) {
-    ledOn();
-    osDelay(500);
+    if (blinkyMode == 0) {
+      ledOn();
+      osDelay(500);
+    } else if (blinkyMode == 1) {
+      ledOn();
+      osDelay(200);
+      ledOff();
+      osDelay(100);
+      ledOn();
+      osDelay(200);
+    } else {
+    }
     ledOff();
     osDelay(1500);
   }
