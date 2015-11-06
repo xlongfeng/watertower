@@ -322,7 +322,7 @@ int main (void)
   
   stdioInit();
   
-  printf("Water Tower Monitor\n");
+  printf("\nWater Tower Monitor\n");
   
   blinkyInit();
   multiPointComInit();
