@@ -91,9 +91,6 @@ void Si4432::init() {
 #ifdef DEBUG
 	printf("SPI is initialized now.\n");
 #endif
-
-	hardReset();
-
 }
 
 void Si4432::boot() {

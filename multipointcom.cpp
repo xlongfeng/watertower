@@ -22,6 +22,8 @@
 #include <cmsis_os.h>                                           // CMSIS RTOS header file
 #include <stdio.h>
 
+#include "stm32f10x_gpio.h"
+
 #include "si4432.h"
 
 // #define HOST_DEBUG
@@ -36,9 +38,9 @@ extern void setBlinkyMode(int mode);
 extern void setUltrasonicRangingSampleInterval(uint16_t sampleInterval);
 extern uint32_t getUltrasonicRangingSample(uint16_t index);
 
-static const uint8_t WaterTowerMaximumQuantity = 16;
-static const uint8_t WaterTowerIdentityBase = 0x10;
-static uint8_t waterTowerIdentity = WaterTowerIdentityBase;
+static const uint8_t MultiPointComMaximumQuantity = 16;
+static const uint8_t MultiPointComIdentityBase = 0x10;
+static uint8_t multiPointComIdentity = MultiPointComIdentityBase;
   
 static Si4432 *radio;
 static bool radioInitialize = false;
@@ -57,8 +59,6 @@ static void sendResponse(int id)
 {
   uint32_t sample = getUltrasonicRangingSample(id & 0x01);
   
-  sample = id * 100;
-  
   response[0] = id;
   response[1] = 0;
   response[2] = (sample >> 0) & 0xFF;
@@ -70,12 +70,41 @@ static void sendResponse(int id)
   radio->sendPacket(6, response);
 }
 
-void setWaterTowerIdentity(int id)
+void setMultiPointComIdentity(uint8_t id)
 {
-  if (id > WaterTowerMaximumQuantity)
+  id <<= 1;
+  if (id > MultiPointComMaximumQuantity)
     printf("Set watertower identity %d error!\n", id);
   
-  waterTowerIdentity = WaterTowerIdentityBase + id & ~0x01;
+  multiPointComIdentity = MultiPointComIdentityBase + id & ~0x01;
+  printf("Multi point com identity 0x%02x\n", multiPointComIdentity);
+}
+
+uint8_t readChipAddress(void)
+{
+  GPIO_InitTypeDef gpioInitStructure;
+  
+  gpioInitStructure.GPIO_Pin = GPIO_Pin_0;
+  gpioInitStructure.GPIO_Speed = GPIO_Speed_2MHz;
+  gpioInitStructure.GPIO_Mode = GPIO_Mode_IPU;
+  GPIO_Init(GPIOC, &gpioInitStructure);
+  
+  gpioInitStructure.GPIO_Pin = GPIO_Pin_1;
+  gpioInitStructure.GPIO_Speed = GPIO_Speed_2MHz;
+  gpioInitStructure.GPIO_Mode = GPIO_Mode_IPU;
+  GPIO_Init(GPIOC, &gpioInitStructure);
+  
+  gpioInitStructure.GPIO_Pin = GPIO_Pin_2;
+  gpioInitStructure.GPIO_Speed = GPIO_Speed_2MHz;
+  gpioInitStructure.GPIO_Mode = GPIO_Mode_IPU;
+  GPIO_Init(GPIOC, &gpioInitStructure);
+  
+  gpioInitStructure.GPIO_Pin = GPIO_Pin_3;
+  gpioInitStructure.GPIO_Speed = GPIO_Speed_2MHz;
+  gpioInitStructure.GPIO_Mode = GPIO_Mode_IPU;
+  GPIO_Init(GPIOC, &gpioInitStructure);
+  
+  return GPIO_ReadInputData(GPIOC) & 0x0f;
 }
 
 int multiPointComInit(void)
@@ -93,12 +122,9 @@ void multiPointCom (void const *argument)
   bool pkg;
   
   setUltrasonicRangingSampleInterval(sampleInterval);
+  setMultiPointComIdentity(readChipAddress());
   
   radio->init();
-  radio->setBaudRate(30);
-  radio->setFrequency(433);
-  radioInitialize = true;
-  // radio->readAll();
   
 #ifdef HOST_DEBUG
   while (1) {
@@ -115,15 +141,17 @@ void multiPointCom (void const *argument)
     osDelay(1000);
   }
 #else
-  radio->startListening();
+
   while (1) {
     if (!radioInitialize) {
-      printf("Reinitialize radio\n");
+      printf("Radio initializing ...\n");
       radioInitialize = true;
       radio->hardReset();
       radio->setBaudRate(30);
       radio->setFrequency(433);
       radio->startListening();
+      connectedTick = osKernelSysTick();
+      setBlinkyMode(0);
     }
     
     pkg = radio->isPacketReceived();
@@ -146,7 +174,7 @@ void multiPointCom (void const *argument)
       
       id = request[0];
       
-      if ((id & ~0x01) != waterTowerIdentity) {
+      if ((id & ~0x01) != multiPointComIdentity) {
         radio->startListening();
         continue;
       }
@@ -166,8 +194,8 @@ void multiPointCom (void const *argument)
       connectedTick = osKernelSysTick();
       setBlinkyMode(1);
     } else {
-      if (osKernelSysTick() - connectedTick > osKernelSysTickMicroSec((sampleInterval * 4 * 1000) * 1000)) {
-        printf("Multi point communication disconnected more than %d second\n", sampleInterval * 4);
+      if (osKernelSysTick() - connectedTick > osKernelSysTickMicroSec((sampleInterval * 5 * 1000) * 1000)) {
+        printf("Radio disconnected more than %d second\n", sampleInterval * 5);
         connectedTick = osKernelSysTick();
         setBlinkyMode(0);
         radioInitialize = false;
