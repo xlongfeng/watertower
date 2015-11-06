@@ -62,21 +62,8 @@ public:
 
 	void turnOn();
 	void turnOff();
-
-protected:
-	enum AntennaMode {
-		RXMode = 0x04, TXMode = 0x08, Ready = 0x01, TuneMode = 0x02
-	};
-
-	uint64_t _freqCarrier;
-	uint8_t _freqChannel;
-	uint16_t _kbps;
-	uint16_t _packageSign;
-
-	void boot(); // sets SPI and pins ready and boot the radio
-
-	void switchMode(byte mode);
-
+  
+  
 	enum Registers {
 		REG_DEV_TYPE = 0x00,
 		REG_DEV_VERSION = 0x01,
@@ -165,6 +152,30 @@ protected:
 		REG_FIFO = 0x7F,
 
 	};
+  
+  void writeReg(uint8_t reg, uint8_t val)
+  {
+    ChangeRegister((Registers)reg, val);
+  }
+  
+  uint8_t readReg(uint8_t reg)
+  {
+    return ReadRegister((Registers)reg);
+  }
+
+protected:
+	enum AntennaMode {
+		RXMode = 0x04, TXMode = 0x08, Ready = 0x01, TuneMode = 0x02
+	};
+
+	uint64_t _freqCarrier;
+	uint8_t _freqChannel;
+	uint16_t _kbps;
+	uint16_t _packageSign;
+
+	void boot(); // sets SPI and pins ready and boot the radio
+
+	void switchMode(byte mode);
 
 	void ChangeRegister(Registers reg, byte value);
 	byte ReadRegister(Registers reg);

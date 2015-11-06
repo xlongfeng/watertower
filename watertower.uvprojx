@@ -371,7 +371,7 @@
             <vShortWch>0</vShortWch>
             <VariousControls>
               <MiscControls></MiscControls>
-              <Define></Define>
+              <Define>STDOUT_CR_LF=1,STDERR_CR_LF=1</Define>
               <Undefine></Undefine>
               <IncludePath></IncludePath>
             </VariousControls>

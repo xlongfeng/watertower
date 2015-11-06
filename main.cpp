@@ -42,7 +42,6 @@ extern int stdioInit(void);
 extern int blinkyInit(void);
 extern int multiPointComInit(void);
 extern int ultrasonicRangingInit(void);
-extern uint32_t getUltrasonicRangingSample(uint16_t index);
 
 static void rccInit(void)
 {
@@ -97,11 +96,13 @@ typedef struct CmdTableS CmdTableT;
 
 int do_help(CmdTableT *cmdtp, int argc, char *argv[]);
 int do_ur(CmdTableT *cmdtp, int argc, char *argv[]);
+int do_ra(CmdTableT *cmdtp, int argc, char *argv[]);
 
 static const CmdTableT cmdTable[] = {
   {"?", SYS_MAX_ARGS, do_help, "alias for 'help'"},
   {"help", SYS_MAX_ARGS, do_help, "print online help"},
   {"ur", SYS_MAX_ARGS, do_ur, "ultrasonic ranging"},
+  {"ra", SYS_MAX_ARGS, do_ra, "radio controller"},
 };
 
 #define CMD_ITEMS (sizeof (cmdTable) / sizeof (cmdTable[0]))
@@ -152,6 +153,8 @@ int do_help(CmdTableT *cmdtp, int argc, char *argv[])
   return 0;
 }
 
+extern uint32_t getUltrasonicRangingSample(uint16_t index);
+
 int do_ur(CmdTableT *cmdtp, int argc, char *argv[])
 {
   uint32_t sample0 = getUltrasonicRangingSample(0);
@@ -160,6 +163,49 @@ int do_ur(CmdTableT *cmdtp, int argc, char *argv[])
   uint32_t distance1 = sample1 * 340 / 2 / 10000;
   printf("Ultrasonic ranging sample[0]: %d cm <%d usec>, sample[1]: %d cm <%d usec>\n",
       distance0, sample0, distance1, sample1);
+  return 0;
+}
+
+extern void radioReset(void);
+extern void radioDumpReg(void);
+extern uint8_t radioReadReg(uint8_t reg);
+extern void radioWriteReg(uint8_t reg, uint8_t value);
+
+int do_ra(CmdTableT *cmdtp, int argc, char *argv[])
+{
+  int len;
+  
+  switch (argc) {
+  case 2:
+    len = strlen(argv[1]);
+    if (strncmp(argv[1], "reset", len) == 0) {
+      printf("Reset radio\n");
+      radioReset();
+    }
+    if (strncmp(argv[1], "dump", len) == 0) {
+      radioDumpReg();
+    }
+    break;
+  case 3:
+    len = strlen(argv[1]);
+    if (strncmp(argv[1], "read", len) == 0) {
+      uint8_t reg = strtoul(argv[2], NULL, 0);
+      printf("Read radio reg %x: %x\n", reg, radioReadReg(reg));
+    }
+    break;
+  case 4:
+    len = strlen(argv[1]);
+    if (strncmp(argv[1], "read", len) == 0) {
+      uint8_t reg = strtoul(argv[2], NULL, 0);
+      uint8_t val = strtoul(argv[3], NULL, 0);
+      radioWriteReg(reg, val);
+      printf("Write radio reg %x: %x [%x]\n", reg, val, radioReadReg(reg));
+    }
+    break;
+  default:
+    cmdUsage(cmdtp);
+    break;
+  }
   return 0;
 }
 

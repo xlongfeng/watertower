@@ -72,7 +72,7 @@ static UltrasonicRanging sensors[2] = {
 #define TIM_ACCURACY_USEC_SHIFT 3
 #define TIM_ACCURACY_USEC (1 << TIM_ACCURACY_USEC_SHIFT)
 
-static uint16_t ultrasonicRangingsampleInterval = 10;
+static uint16_t ultrasonicRangingsampleInterval = 0;
 
 /*----------------------------------------------------------------------------
  *      Thread 1: ultrasonic ranging thread

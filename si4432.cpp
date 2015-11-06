@@ -173,7 +173,9 @@ bool Si4432::sendPacket(uint8_t length, const byte* data, bool waitResponse, uin
 			} else {
 				return true;
 			}
-		}
+		} else {
+      osThreadYield();
+    }
 	}
 
 	//timeout occured.
@@ -199,7 +201,7 @@ bool Si4432::waitForPacket(uint64_t waitMs) {
 	while (osKernelSysTick() - enterMillis < osKernelSysTickMicroSec(waitMs * 1000)) {
 
 		if (!isPacketReceived()) {
-			continue;
+			osThreadYield();
 		} else {
 			return true;
 		}
@@ -233,7 +235,7 @@ void Si4432::setChannel(byte channel) {
 void Si4432::switchMode(byte mode) {
 
 	ChangeRegister(REG_STATE, mode); // receive mode
-	//delay(20);
+	// osDelay(5);
 #ifdef DEBUG
 	byte val = ReadRegister(REG_DEV_STATUS);
 	if (val == 0 || val == 0xFF) {
