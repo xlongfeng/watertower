@@ -45,8 +45,9 @@ static uint8_t multiPointComIdentity = MultiPointComIdentityBase;
 static Si4432 *radio;
 static bool radioInitialize = false;
 
-static uint8_t sampleInterval = 2;
+static uint8_t sampleInterval = 10;
 static uint32_t connectedTick;
+static uint32_t disconnectCount = 1;
 
 static byte response[64];
 static byte request[64];
@@ -57,7 +58,12 @@ osThreadDef (multiPointCom, osPriorityNormal, 1, 0);                  // thread 
 
 static void sendResponse(int id)
 {
-  uint32_t sample = getUltrasonicRangingSample(id & 0x01);
+  uint32_t sample;
+  if (id < (MultiPointComIdentityBase + 2)) {
+    sample = getUltrasonicRangingSample(id & 0x01);
+  } else {
+    sample = getUltrasonicRangingSample(0);
+  }
   
   response[0] = id;
   response[1] = 0;
@@ -72,11 +78,13 @@ static void sendResponse(int id)
 
 void setMultiPointComIdentity(uint8_t id)
 {
-  id <<= 1;
+  /*  chip 0 occupy 2 addresses: 0 and 1 */
+  if (id > 0)
+    id += 1;
   if (id > MultiPointComMaximumQuantity)
     printf("Set watertower identity %d error!\n", id);
   
-  multiPointComIdentity = MultiPointComIdentityBase + id & ~0x01;
+  multiPointComIdentity = MultiPointComIdentityBase + id;
   printf("Multi point com identity 0x%02x\n", multiPointComIdentity);
 }
 
@@ -174,7 +182,15 @@ void multiPointCom (void const *argument)
       
       id = request[0];
       
-      if ((id & ~0x01) != multiPointComIdentity) {
+      if (multiPointComIdentity < (MultiPointComIdentityBase + 2)) {
+        /* chip 0 */
+        if ((id & ~0x01) != multiPointComIdentity) {
+          radio->startListening();
+          continue;
+        }
+      } else if (id == multiPointComIdentity) {
+        /* chip address form 2 */
+      } else {
         radio->startListening();
         continue;
       }
@@ -195,7 +211,8 @@ void multiPointCom (void const *argument)
       setBlinkyMode(1);
     } else {
       if (osKernelSysTick() - connectedTick > osKernelSysTickMicroSec((sampleInterval * 5 * 1000) * 1000)) {
-        printf("Radio disconnected more than %d second\n", sampleInterval * 5);
+        printf("Radio %d disconnected more than %d second\n", disconnectCount++, sampleInterval * 5);
+        sampleInterval = 10;
         connectedTick = osKernelSysTick();
         setBlinkyMode(0);
         radioInitialize = false;
