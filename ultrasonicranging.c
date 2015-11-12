@@ -26,6 +26,11 @@
 
 #include "stm32f10x_exti.h"
 
+#define TIM_CAPTURE_INVALID 0xffff
+#define TIM_PERIOD 0x7fff
+#define TIM_ACCURACY_USEC_SHIFT 3
+#define TIM_ACCURACY_USEC (1 << TIM_ACCURACY_USEC_SHIFT)
+
 typedef struct
 {
   uint8_t id;
@@ -38,6 +43,7 @@ typedef struct
   uint16_t irq;
   uint16_t capture;
   uint32_t delta_usec;
+  uint8_t renewed;
 } UltrasonicRanging;
 
 static UltrasonicRanging sensors[2] = {
@@ -50,6 +56,8 @@ static UltrasonicRanging sensors[2] = {
     TIM5,
     TIM_Channel_3,
     TIM_IT_CC3,
+    TIM_CAPTURE_INVALID,
+    TIM_CAPTURE_INVALID,
     0,
   },
   {
@@ -61,16 +69,13 @@ static UltrasonicRanging sensors[2] = {
     TIM5,
     TIM_Channel_4,
     TIM_IT_CC4,
+    TIM_CAPTURE_INVALID,
+    TIM_CAPTURE_INVALID,
     0,
   },
 };
 
 #define NUM_OF_SENSOR (sizeof (sensors) / sizeof (sensors[0]))
-
-#define TIM_CAPTURE_INVALID 0xffff
-#define TIM_PERIOD 0x7fff
-#define TIM_ACCURACY_USEC_SHIFT 3
-#define TIM_ACCURACY_USEC (1 << TIM_ACCURACY_USEC_SHIFT)
 
 static uint16_t ultrasonicRangingsampleInterval = 0;
 
@@ -146,6 +151,7 @@ static void timICStop(UltrasonicRanging *sensor)
 void TIM5_IRQHandler(void)
 {
   UltrasonicRanging *sensor;
+  uint32_t delta_usec;
   uint16_t capture;
   int i;
   
@@ -154,12 +160,14 @@ void TIM5_IRQHandler(void)
     if (TIM_GetITStatus(sensor->tim, sensor->irq) == SET) {
       TIM_ClearITPendingBit(sensor->tim, sensor->irq);
       if (sensor->capture != TIM_CAPTURE_INVALID) {
+        sensor->renewed = 0;
         capture = TIM_GetCapture(sensor->tim, sensor->irq);
         if (capture > sensor->capture) {
-          sensor->delta_usec = (capture - sensor->capture) << TIM_ACCURACY_USEC_SHIFT;
+          delta_usec = (capture - sensor->capture) << TIM_ACCURACY_USEC_SHIFT;
         } else {
-          sensor->delta_usec = ((TIM_PERIOD - sensor->capture + 1) + capture) << TIM_ACCURACY_USEC_SHIFT;
+          delta_usec = ((TIM_PERIOD - sensor->capture + 1) + capture) << TIM_ACCURACY_USEC_SHIFT;
         }
+        sensor->delta_usec = delta_usec > 5 ? delta_usec :  TIM_CAPTURE_INVALID;
         timICStop(sensor);
       } else {
         sensor->capture = TIM_GetCapture(sensor->tim, sensor->irq);
@@ -188,7 +196,7 @@ static void sensorInit(void)
     
     gpioInitStructure.GPIO_Pin = sensor->echo;
     gpioInitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-    gpioInitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+    gpioInitStructure.GPIO_Mode = GPIO_Mode_IPD;
     GPIO_Init(sensor->echoGPIO, &gpioInitStructure);
     
     timTimeBaseInitStruct.TIM_Prescaler = captureAccuracy(TIM_ACCURACY_USEC);
@@ -220,7 +228,10 @@ uint32_t getUltrasonicRangingSample(uint16_t index)
 {
   if (index > NUM_OF_SENSOR)
     return 0;
-  return sensors[index].delta_usec;
+  if (sensors[index].renewed < 3)
+    return sensors[index].delta_usec;
+  else
+    return TIM_CAPTURE_INVALID;
 }
 
 void ultrasonicRanging(void const *argument)
@@ -234,6 +245,9 @@ void ultrasonicRanging(void const *argument)
     if (ultrasonicRangingsampleInterval > 0) {
       for (i = 0; i < NUM_OF_SENSOR; i++) {
         sensor = &sensors[i];
+        sensor->renewed++;
+        if (sensor->renewed > 128)
+          sensor->renewed = 128;
         timICStart(sensor);
         GPIO_WriteBit(sensor->triggerGPIO, sensor->trigger, Bit_SET);
         osDelay(2);
