@@ -417,26 +417,6 @@
           <GroupName>Source</GroupName>
           <Files>
             <File>
-              <FileName>blinky.cpp</FileName>
-              <FileType>8</FileType>
-              <FilePath>.\blinky.cpp</FilePath>
-            </File>
-            <File>
-              <FileName>main.cpp</FileName>
-              <FileType>8</FileType>
-              <FilePath>.\main.cpp</FilePath>
-            </File>
-            <File>
-              <FileName>stdio_UART.cpp</FileName>
-              <FileType>8</FileType>
-              <FilePath>.\stdio_UART.cpp</FilePath>
-            </File>
-            <File>
-              <FileName>ultrasonicranging.cpp</FileName>
-              <FileType>8</FileType>
-              <FilePath>.\ultrasonicranging.cpp</FilePath>
-            </File>
-            <File>
               <FileName>si4432.cpp</FileName>
               <FileType>8</FileType>
               <FilePath>.\si4432.cpp</FilePath>
@@ -445,6 +425,26 @@
               <FileName>multipointcom.cpp</FileName>
               <FileType>8</FileType>
               <FilePath>.\multipointcom.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>ultrasonicranging.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\ultrasonicranging.c</FilePath>
+            </File>
+            <File>
+              <FileName>blinky.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\blinky.c</FilePath>
+            </File>
+            <File>
+              <FileName>main.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\main.c</FilePath>
+            </File>
+            <File>
+              <FileName>stdio_UART.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\stdio_UART.c</FilePath>
             </File>
           </Files>
         </Group>

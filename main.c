@@ -32,16 +32,13 @@
 
 #include "misc.h"
 
+#include "common.h"
+
 #define SYS_CBSIZE 128
 #define SYS_MAX_ARGS 4
 
 static const char *sysPrompt = "STM32# ";
 static char consoleBuffer[SYS_CBSIZE];
-
-extern int stdioInit(void);
-extern int blinkyInit(void);
-extern int multiPointComInit(void);
-extern int ultrasonicRangingInit(void);
 
 static void rccInit(void)
 {
@@ -154,8 +151,6 @@ int do_help(CmdTableT *cmdtp, int argc, char *argv[])
   return 0;
 }
 
-extern uint32_t getUltrasonicRangingSample(uint16_t index);
-
 int do_ur(CmdTableT *cmdtp, int argc, char *argv[])
 {
   uint32_t sample0 = getUltrasonicRangingSample(0);
@@ -166,11 +161,6 @@ int do_ur(CmdTableT *cmdtp, int argc, char *argv[])
       distance0, sample0, distance1, sample1);
   return 0;
 }
-
-extern void radioReset(void);
-extern void radioDumpReg(void);
-extern uint8_t radioReadReg(uint8_t reg);
-extern void radioWriteReg(uint8_t reg, uint8_t value);
 
 int do_ra(CmdTableT *cmdtp, int argc, char *argv[])
 {
