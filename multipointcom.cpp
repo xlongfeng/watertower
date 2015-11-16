@@ -26,17 +26,15 @@
 
 #include "si4432.h"
 
-// #define HOST_DEBUG
+#include "common.h"
+
+// #define DISTANCE_TEST
 // #define DEBUG
 
 /* Protocol data frame format
  * | Addr[1] | Protocol Field[1] | Data Field[n] | CRC[1] |
  * Len: data frame length, must be less than or equal 64 bytes.
  */
-
-extern void setBlinkyMode(int mode);
-extern void setUltrasonicRangingSampleInterval(uint16_t sampleInterval);
-extern uint32_t getUltrasonicRangingSample(uint16_t index);
 
 static const uint8_t MultiPointComMaximumQuantity = 16;
 static const uint8_t MultiPointComIdentityBase = 0x10;
@@ -58,12 +56,7 @@ osThreadDef (multiPointCom, osPriorityNormal, 1, 0);                  // thread 
 
 static void sendResponse(int id)
 {
-  uint32_t sample;
-  if (id < (MultiPointComIdentityBase + 2)) {
-    sample = getUltrasonicRangingSample(id & 0x01);
-  } else {
-    sample = getUltrasonicRangingSample(0);
-  }
+  uint32_t sample = getUltrasonicRangingSample(id & 0x01);
   
   response[0] = id;
   response[1] = 0;
@@ -134,19 +127,66 @@ void multiPointCom (void const *argument)
   
   radio->init();
   
-#ifdef HOST_DEBUG
-  while (1) {
-    byte resLen = 0;
-    byte answer[64] = { 0 };
-    pkg = radio->sendPacket(32, response, true, 70, &resLen, answer);
-    if (pkg) {
-      printf("Response packet received <%d>: ", resLen);
-      for (i = 0; i < resLen; i++) {
-        printf("%x ", answer[i]);
+#ifdef DISTANCE_TEST
+  if (!radioInitialize) {
+    printf("Radio initializing ...\n");
+    radioInitialize = true;
+    radio->hardReset();
+    radio->setBaudRate(30);
+    radio->setFrequency(433);
+    radio->startListening();
+    connectedTick = osKernelSysTick();
+    setBlinkyMode(0);
+  }
+  if (multiPointComIdentity == MultiPointComIdentityBase) {
+    /* Host */
+    printf("I'm the host device\n");
+    while (1) {
+      byte resLen = 0;
+      int i;
+      pkg = radio->sendPacket(32, request, true, 100, &resLen, response);
+      if (pkg) {
+        printf("Response packet received <%d>: ", resLen);
+        for (i = 0; i < resLen; i++) {
+          printf("%x ", response[i]);
+        }
+        printf("\n");
       }
-      printf("\n");
+      osDelay(1000);
     }
-    osDelay(1000);
+  } else {
+    /* Slave */
+    printf("I'm the slave device\n");
+    while (1) {
+      pkg = radio->isPacketReceived();
+      if (pkg) {
+        byte len = 0;
+        int id;
+        uint8_t protocol;
+        radio->getPacketReceived(&len, request);
+
+        {
+          int i;
+          printf("Packet received <%d>: ", len);
+          for (i = 0; i < len; i++) {
+            printf("%x ", request[i]);
+          }
+          printf("\n");
+        }
+        
+        radio->sendPacket(6, request);
+        radio->startListening();
+        connectedTick = osKernelSysTick();
+        setBlinkyMode(1);
+      } else {
+        if (osKernelSysTick() - connectedTick > osKernelSysTickMicroSec((3 * 1000) * 1000)) {
+          printf("Radio %d disconnected more than 3 second\n", disconnectCount++);
+          connectedTick = osKernelSysTick();
+          setBlinkyMode(0);
+        }
+        osThreadYield();
+      }
+    }
   }
 #else
 
@@ -182,15 +222,7 @@ void multiPointCom (void const *argument)
       
       id = request[0];
       
-      if (multiPointComIdentity < (MultiPointComIdentityBase + 2)) {
-        /* chip 0 */
-        if ((id & ~0x01) != multiPointComIdentity) {
-          radio->startListening();
-          continue;
-        }
-      } else if (id == multiPointComIdentity) {
-        /* chip address form 2 */
-      } else {
+      if ((id & ~0x01) != multiPointComIdentity) {
         radio->startListening();
         continue;
       }
