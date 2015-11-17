@@ -146,6 +146,7 @@ void multiPointCom (void const *argument)
       int i;
       pkg = radio->sendPacket(32, request, true, 100, &resLen, response);
       if (pkg) {
+        printf("RSSI %d\n", radioReadReg(0x26));
         printf("Response packet received <%d>: ", resLen);
         for (i = 0; i < resLen; i++) {
           printf("%x ", response[i]);
@@ -164,6 +165,7 @@ void multiPointCom (void const *argument)
         int id;
         uint8_t protocol;
         radio->getPacketReceived(&len, request);
+        printf("RSSI %d\n", radioReadReg(0x26));
 
         {
           int i;
@@ -210,7 +212,7 @@ void multiPointCom (void const *argument)
       radio->getPacketReceived(&len, request);
       
 #ifdef DEBUG
-      {
+      if (0) {
         int i;
         printf("Packet received <%d>: ", len);
         for (i = 0; i < len; i++) {
@@ -226,6 +228,10 @@ void multiPointCom (void const *argument)
         radio->startListening();
         continue;
       }
+
+#ifdef DEBUG      
+      printf("RSSI %d\n", radioReadReg(0x26));
+#endif
       
       switch (len) {
       case 3:
