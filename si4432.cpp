@@ -23,7 +23,7 @@ const uint16_t IFFilterTable[][2] = { { 322, 0x26 }, { 3355, 0x88 }, { 3618, 0x8
 		5188, 0x8C }, { 5770, 0x8D }, { 6207, 0x8E } };
 
 Si4432::Si4432() :
-		_freqCarrier(433000000), _freqChannel(0), _kbps(100), _packageSign(0xDEAD) { // default is 450 mhz
+		_freqCarrier(433), _freqChannel(0), _kbps(30), _packageSign(0xDEAD) { // default is 450 mhz
 
 }
 
@@ -38,12 +38,14 @@ void Si4432::setFrequency(unsigned long baseFrequencyMhz) {
 		highBand = 1;
 	}
 
-	double fPart = (baseFrequencyMhz / (10 * (highBand + 1))) - 24;
+	double fPart = (baseFrequencyMhz / (10.0 * (highBand + 1))) - 24;
 
 	uint8_t freqband = (uint8_t) fPart; // truncate the int
 
 	uint16_t freqcarrier = (fPart - freqband) * 64000;
-
+#ifdef PRINT_FREQ_BAND_SETTINGS
+  printf("%s: freqband 0x%x, freqcarrier 0x%x\n", __FUNCTION__, freqband, freqcarrier);
+#endif
 	// sideband is always on (0x40) :
 	byte vals[3] = { 0x40 | (highBand << 5) | (freqband & 0x3F), freqcarrier >> 8, freqcarrier & 0xFF };
 
@@ -231,8 +233,9 @@ void Si4432::setChannel(byte channel) {
 
 void Si4432::switchMode(byte mode) {
 
+  if (mode & TXMode)
+    osDelay(1);
 	ChangeRegister(REG_STATE, mode); // receive mode
-	// osDelay(5);
 #ifdef DEBUG
 	byte val = ReadRegister(REG_DEV_STATUS);
 	if (val == 0 || val == 0xFF) {
@@ -256,12 +259,17 @@ void Si4432::setBaudRate(uint16_t kbps) {
 	byte modulationValue = _kbps < 30 ? 0x4c : 0x0c;		// use FIFO Mode, GFSK, low baud mode on / off
 
 	byte modulationVals[] = { modulationValue, 0x23, round((freqDev * 1000.0) / 625.0) }; // msb of the kpbs to 3rd bit of register
+#ifdef PRINT_FREQ_BAND_SETTINGS
+  printf("%s: modulationVals[] 0x%x 0x%x 0x%x\n", __FUNCTION__, modulationVals[0], modulationVals[1], modulationVals[2]);
+#endif
 	BurstWrite(REG_MODULATION_MODE1, modulationVals, 3);
 
 	// set data rate
 	uint16_t bpsRegVal = round((kbps * (kbps < 30 ? 2097152 : 65536.0)) / 1000.0);
 	byte datarateVals[] = { bpsRegVal >> 8, bpsRegVal & 0xFF };
-
+#ifdef PRINT_FREQ_BAND_SETTINGS
+  printf("%s: datarateVals[] 0x%x 0x%x\n", __FUNCTION__, datarateVals[0], datarateVals[1]);
+#endif
 	BurstWrite(REG_TX_DATARATE1, datarateVals, 2);
 
 	//now set the timings
@@ -280,7 +288,9 @@ void Si4432::setBaudRate(uint16_t kbps) {
 #ifdef DEBUG
 	printf("Selected IF value: %x\n", IFValue);
 #endif
-
+#ifdef PRINT_FREQ_BAND_SETTINGS
+  printf("%s: IFValue 0x%x\n", __FUNCTION__, IFValue);
+#endif
 	ChangeRegister(REG_IF_FILTER_BW, IFValue);
 
 	byte dwn3_bypass = (IFValue & 0x80) ? 1 : 0; // if msb is set
@@ -306,7 +316,10 @@ void Si4432::setBaudRate(uint16_t kbps) {
 
 	byte timingVals[] = { rxOversampling & 0x00FF, ((rxOversampling & 0x0700) >> 3) | ((ncOffset >> 16) & 0x0F),
 			(ncOffset >> 8) & 0xFF, ncOffset & 0xFF, ((crGain & 0x0700) >> 8) | crMultiplier, crGain & 0xFF };
-
+#ifdef PRINT_FREQ_BAND_SETTINGS
+  printf("%s: timingVals[] 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x\n", __FUNCTION__,
+      timingVals[0], timingVals[1], timingVals[2], timingVals[3], timingVals[4], timingVals[5]);
+#endif
 	BurstWrite(REG_CLOCK_RECOVERY_OVERSAMPLING, timingVals, 6);
 
 }

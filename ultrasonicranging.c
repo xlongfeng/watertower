@@ -249,12 +249,12 @@ void ultrasonicRanging(void const *argument)
         sensor->renewed++;
         if (sensor->renewed > 128)
           sensor->renewed = 128;
-        timICStart(sensor);
         GPIO_WriteBit(sensor->triggerGPIO, sensor->trigger, Bit_SET);
         osDelay(2);
+        timICStart(sensor);
         GPIO_WriteBit(sensor->triggerGPIO, sensor->trigger, Bit_RESET);
+        osDelay(ultrasonicRangingsampleInterval * 500);
       }
-      osDelay(ultrasonicRangingsampleInterval * 1000);
     } else {
       osDelay(1000);
     }

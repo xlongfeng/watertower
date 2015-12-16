@@ -19,6 +19,7 @@
  *
  */
  
+#include <cmsis_os.h> 
 #include "Driver_UART.h"
  
 //-------- <<< Use Configuration Wizard in Context Menu >>> --------------------
@@ -93,8 +94,8 @@ int stderr_putchar (int ch) {
   uint8_t buf[1];
  
   buf[0] = ch;
-  if (ptrUART->WriteData(buf, 1) != 1) {
-    return (-1);
+  while (ptrUART->WriteData(buf, 1) != 1) {
+    osThreadYield();
   }
   return (ch);
 }
@@ -109,8 +110,8 @@ int stdout_putchar (int ch) {
   uint8_t buf[1];
  
   buf[0] = ch;
-  if (ptrUART->WriteData(buf, 1) != 1) {
-    return (-1);
+  while (ptrUART->WriteData(buf, 1) != 1) {
+    osThreadYield();
   }
   return (ch);
 }

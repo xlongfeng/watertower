@@ -29,7 +29,7 @@
 #include "common.h"
 
 // #define DISTANCE_TEST
-// #define DEBUG
+#define DEBUG
 
 /* Protocol data frame format
  * | Addr[1] | Protocol Field[1] | Data Field[n] | CRC[1] |
@@ -65,15 +65,11 @@ static void sendResponse(int id)
   response[4] = (sample >> 16) & 0xFF;
   response[5] = (sample >> 24) & 0xFF;
   
-  osDelay(10);
   radio->sendPacket(6, response);
 }
 
 void setMultiPointComIdentity(uint8_t id)
 {
-  /*  chip 0 occupy 2 addresses: 0 and 1 */
-  if (id > 0)
-    id += 1;
   if (id > MultiPointComMaximumQuantity)
     printf("Set watertower identity %d error!\n", id);
   
@@ -105,7 +101,7 @@ uint8_t readChipAddress(void)
   gpioInitStructure.GPIO_Mode = GPIO_Mode_IPU;
   GPIO_Init(GPIOC, &gpioInitStructure);
   
-  return GPIO_ReadInputData(GPIOC) & 0x0f;
+  return (GPIO_ReadInputData(GPIOC) & 0x0f) << 1;
 }
 
 int multiPointComInit(void)
@@ -132,8 +128,6 @@ void multiPointCom (void const *argument)
     printf("Radio initializing ...\n");
     radioInitialize = true;
     radio->hardReset();
-    radio->setBaudRate(30);
-    radio->setFrequency(433);
     radio->startListening();
     connectedTick = osKernelSysTick();
     setBlinkyMode(0);
@@ -197,8 +191,6 @@ void multiPointCom (void const *argument)
       printf("Radio initializing ...\n");
       radioInitialize = true;
       radio->hardReset();
-      radio->setBaudRate(30);
-      radio->setFrequency(433);
       radio->startListening();
       connectedTick = osKernelSysTick();
       setBlinkyMode(0);
@@ -230,7 +222,7 @@ void multiPointCom (void const *argument)
       }
 
 #ifdef DEBUG      
-      printf("RSSI %d\n", radioReadReg(0x26));
+      printf("%d: RSSI %d\n", id, radioReadReg(0x26));
 #endif
       
       switch (len) {
